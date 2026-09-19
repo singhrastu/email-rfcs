@@ -1,0 +1,32 @@
+# An RFC being replaced is not an event anybody gets told about. DMARC moved from
+# 7489 to 9989, 9990 and 9991 in May 2026 and nothing announced it. So this
+# rebuilds from the RFC Editor's own index weekly and commits what moved.
+name: Refresh the index
+
+on:
+  schedule:
+    - cron: '41 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: cp rfcs.json /tmp/before.json
+      - run: python3 export_rfcs.py --fetch-texts
+      - run: python3 rfc_diff.py /tmp/before.json rfcs.json | tee /tmp/summary.txt
+      - name: Commit if anything moved
+        run: |
+          if git diff --quiet; then echo "No change."; exit 0; fi
+          git config user.name  "email-rfcs"
+          git config user.email "singhrastu@gmail.com"
+          git add -A
+          { echo "Refresh the index"; echo; cat /tmp/summary.txt; } > /tmp/msg.txt
+          git commit -F /tmp/msg.txt
+          git push
